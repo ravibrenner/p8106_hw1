@@ -26,6 +26,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 ```{r}
+library(glmnet)
 library(caret)
 library(tidymodels)
 library(pls)
@@ -49,6 +50,8 @@ Very brief exploration of the training data
 ```{r}
 x <- model.matrix(Sale_Price ~ ., training)[,-1]
 
+y <- as.matrix(training[,"Sale_Price"])
+
 corrplot::corrplot(cor(x), method = "circle", type = "full",
                    tl.cex = 0.5)
 
@@ -62,35 +65,10 @@ the test error. When the 1SE rule is applied, how many predictors are included i
 the model?
 
 ```{r}
-ctrl1 <- trainControl(method = "cv", number = 10)
-
 set.seed(2025)
-lasso.fit <- train(Sale_Price ~ .,
-                   data = training,
-                   method = "glmnet",
-                   tuneGrid = expand.grid(alpha = 1, 
-                                          lambda = exp(seq(10, -5, length = 100))),
-                   trControl = ctrl1)
-
-plot(lasso.fit, xTrans = log)
-
-# best tuning parameter
-best_lambda <- lasso.fit$bestTune$lambda
-
-# prediction error
-lasso.fit$results |>
-  filter(lambda == best_lambda) 
-
-# test error
-lasso.pred <- predict(lasso.fit, newdata = testing)
-mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull())
-
-
-# coefficients in the best lambda model
-coef(lasso.fit$finalModel, lasso.fit$bestTune$lambda)
-
-# coefficients in 1se model
-coef(lasso.fit$finalModel, lasso.fit$)
+cv.lasso <- cv.glmnet(x, y, 
+                      alpha = 1, 
+                      lambda = exp(seq(10, -5, length = 100)))
 ```
 
 
@@ -107,7 +85,7 @@ many components are included in your model?
 ## d. Model comparison
 (d) Choose the best model for predicting the response and explain your choice.
 
-## e. Lasso using glmnet
+## e. Lasso using caret
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
 “glmnet”, and vice versa. Compare the selected tuning parameters between the two
 software approaches. Should there be discrepancies in the chosen parameters, discuss
