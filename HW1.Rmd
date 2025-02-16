@@ -162,7 +162,6 @@ enet.1se <- train(Sale_Price ~ .,
                   trControl = ctrl2)
 
 lambda_1se <- enet.1se$bestTune |> pull(lambda)
-enet.1se$results
 
 ```
 
