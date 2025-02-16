@@ -1,0 +1,114 @@
+---
+title: "P8106 - HW1"
+author: "Ravi Brenner"
+output: 
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{lipsum}
+- \pagestyle{fancy}
+- \fancyhead[R]{\thepage}
+- \fancypagestyle{plain}{\pagestyle{fancy}}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+```{r}
+library(caret)
+library(tidymodels)
+library(pls)
+library(readr)
+```
+
+In this exercise, we predict the sale price of a house based on various characteristics. The
+training data are in “housing train.csv”, and the test data are in “housing test.csv”. The
+response is in the column “Sale price”, and other variables can be used as predictors. The
+variable definitions can be found in “dictionary.txt”.
+
+## Data and problem
+
+Load data
+```{r}
+training <- read_csv("housing_training.csv")
+testing <- read_csv("housing_test.csv")
+```
+
+Very brief exploration of the training data
+```{r}
+x <- model.matrix(Sale_Price ~ ., training)[,-1]
+
+corrplot::corrplot(cor(x), method = "circle", type = "full",
+                   tl.cex = 0.5)
+
+```
+
+
+
+## a. Lasso model
+(a) Fit a lasso model on the training data. Report the selected tuning parameter and
+the test error. When the 1SE rule is applied, how many predictors are included in
+the model?
+
+```{r}
+ctrl1 <- trainControl(method = "cv", number = 10)
+
+set.seed(2025)
+lasso.fit <- train(Sale_Price ~ .,
+                   data = training,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1, 
+                                          lambda = exp(seq(10, -5, length = 100))),
+                   trControl = ctrl1)
+
+plot(lasso.fit, xTrans = log)
+
+# best tuning parameter
+best_lambda <- lasso.fit$bestTune$lambda
+
+# prediction error
+lasso.fit$results |>
+  filter(lambda == best_lambda) 
+
+# test error
+lasso.pred <- predict(lasso.fit, newdata = testing)
+mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull())
+
+
+# coefficients in the best lambda model
+coef(lasso.fit$finalModel, lasso.fit$bestTune$lambda)
+
+# coefficients in 1se model
+coef(lasso.fit$finalModel, lasso.fit$)
+```
+
+
+## b. Elastic net
+(b) Fit an elastic net model on the training data. Report the selected tuning parameters
+and the test error. Is it possible to apply the 1SE rule to select the tuning parameters
+for elastic net? If the 1SE rule is applicable, implement it to select the tuning
+parameters. If not, explain why.
+
+## c. Partial least squares
+(c) Fit a partial least squares model on the training data and report the test error. How
+many components are included in your model?
+
+## d. Model comparison
+(d) Choose the best model for predicting the response and explain your choice.
+
+## e. Lasso using glmnet
+(e) If R package “caret” was used for the lasso in (a), retrain this model using R package
+“glmnet”, and vice versa. Compare the selected tuning parameters between the two
+software approaches. Should there be discrepancies in the chosen parameters, discuss
+potential reasons for these differences.
