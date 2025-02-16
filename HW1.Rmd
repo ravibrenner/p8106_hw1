@@ -49,12 +49,8 @@ testing <- read_csv("housing_test.csv")
 Very brief exploration of the training data
 ```{r}
 x <- model.matrix(Sale_Price ~ ., training)[,-1]
-
-y <- as.matrix(training[,"Sale_Price"])
-
-corrplot::corrplot(cor(x), method = "circle", type = "full",
-                   tl.cex = 0.5)
-
+corrplot::corrplot(cor(x),
+                   method = "circle", type = "full", tl.cex = 0.5)
 ```
 
 
@@ -64,11 +60,69 @@ corrplot::corrplot(cor(x), method = "circle", type = "full",
 the test error. When the 1SE rule is applied, how many predictors are included in
 the model?
 
+Fit model
 ```{r}
+ctrl1 <- trainControl(method = "cv", number = 10)
+
 set.seed(2025)
-cv.lasso <- cv.glmnet(x, y, 
-                      alpha = 1, 
-                      lambda = exp(seq(10, -5, length = 100)))
+lasso.fit <- train(Sale_Price ~ .,
+                   data = training,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1, 
+                                          lambda = exp(seq(10, -5, length = 100))),
+                   trControl = ctrl1)
+
+plot(lasso.fit, xTrans = log)
+```
+
+Best tuning parameter
+```{r}
+best_lambda <- lasso.fit$bestTune$lambda
+```
+
+test error
+```{r}
+lasso.pred <- predict(lasso.fit, newdata = testing)
+mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull())
+```
+
+
+coefficients in the best lambda model
+```{r}
+coef(lasso.fit$finalModel, lasso.fit$bestTune$lambda) |> as.matrix() |> as.data.frame() |> filter(s1 > 0) |> nrow()
+```
+
+coefficients in 1se model
+First, find 1se lambda value
+```{r}
+
+rmse_1se <- lasso.fit$results |>
+  filter(lambda == best_lambda) |>
+  mutate(RMSE_plus_1se = RMSE + RMSESD) |>
+  pull(RMSE_plus_1se)
+
+lasso.fit$results |>
+  filter(RMSE > 24500,
+         RMSE < 26000)
+# closest RMSE to 1SE is 25147.01, or when lambda = 2640.670
+
+lambda_1se <- lasso.fit$results |>
+  filter(RMSE > 24900,
+         RMSE < 25500) |>
+  pull(lambda)
+
+ggplot(lasso.fit$results,aes(x = lambda, y = RMSE)) +
+  geom_point() + 
+  geom_errorbar(aes(ymin = RMSE - RMSESD, ymax = RMSE + RMSESD)) +
+  scale_x_continuous(trans = "log") +
+  geom_vline(xintercept = best_lambda) +
+  geom_hline(yintercept = rmse_1se, color = "blue") +
+  geom_vline(xintercept = lambda_1se)
+```
+
+model with 1se lambda value
+```{r}
+coef(lasso.fit$finalModel, lambda_1se) |> as.matrix() |> as.data.frame() |> filter(s1 > 0) |> nrow()
 ```
 
 
@@ -85,7 +139,7 @@ many components are included in your model?
 ## d. Model comparison
 (d) Choose the best model for predicting the response and explain your choice.
 
-## e. Lasso using caret
+## e. Lasso using glmnet
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
 “glmnet”, and vice versa. Compare the selected tuning parameters between the two
 software approaches. Should there be discrepancies in the chosen parameters, discuss
