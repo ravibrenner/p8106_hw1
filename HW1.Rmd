@@ -104,6 +104,16 @@ lasso.1se <- train(Sale_Price ~ .,
 
 lambda_1se <- lasso.1se$bestTune |> pull(lambda)
 
+
+rmse_1se <- lasso.fit$results |>
+  filter(lambda == best_lambda) |>
+  mutate(RMSESE = RMSESD / sqrt(12),
+         RMSE_1SE = RMSE + RMSESE) |>
+  pull(RMSE_1SE)
+
+lasso.fit$results |>
+  filter(RMSE > 23500,
+         RMSE < 23600)
 ```
 
 model with 1se lambda value
