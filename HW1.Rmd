@@ -107,7 +107,7 @@ lambda_1se <- lasso.1se$bestTune |> pull(lambda)
 
 rmse_1se <- lasso.fit$results |>
   filter(lambda == best_lambda) |>
-  mutate(RMSESE = RMSESD / sqrt(12),
+  mutate(RMSESE = RMSESD / sqrt(12), # why sqrt(12)? in MSE formula is 1/sqrt(fold size)*SD. for RMSE do sqrt of that which is 12 for 1440/10
          RMSE_1SE = RMSE + RMSESE) |>
   pull(RMSE_1SE)
 
