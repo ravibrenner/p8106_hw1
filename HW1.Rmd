@@ -132,6 +132,38 @@ and the test error. Is it possible to apply the 1SE rule to select the tuning pa
 for elastic net? If the 1SE rule is applicable, implement it to select the tuning
 parameters. If not, explain why.
 
+Fit Elastic net model
+```{r}
+set.seed(2025)
+enet.fit <- train(Sale_Price ~ .,
+                  data = training,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(10, -5, length = 100))),
+                  trControl = ctrl1)
+
+enet.fit$bestTune
+
+myCol <- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol),
+              superpose.line = list(col = myCol))
+
+plot(enet.fit, par.settings = myPar, xTrans = log)
+
+# coefficients in the final model
+coef(enet.fit$finalModel, s = enet.fit$bestTune$lambda)
+
+enet.fit$results |>
+  filter(RMSE == min(RMSE)) |>
+  mutate(RMSE_plus_1se = RMSE + RMSESD)
+
+
+lasso.fit$results |>
+  filter(RMSE > 25000,
+         RMSE < 27000)
+```
+
+
 ## c. Partial least squares
 (c) Fit a partial least squares model on the training data and report the test error. How
 many components are included in your model?
