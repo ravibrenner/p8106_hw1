@@ -62,7 +62,7 @@ the model?
 
 Fit model
 ```{r}
-ctrl1 <- trainControl(method = "cv", number = 10)
+ctrl1 <- trainControl(method = "cv", number = 10, selectionFunction = "best")
 
 set.seed(2025)
 lasso.fit <- train(Sale_Price ~ .,
@@ -78,50 +78,39 @@ plot(lasso.fit, xTrans = log)
 Best tuning parameter
 ```{r}
 best_lambda <- lasso.fit$bestTune$lambda
+best_lambda
 ```
 
 test error
 ```{r}
 lasso.pred <- predict(lasso.fit, newdata = testing)
-mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull())
+mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull()) #MSE
+mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull()) |> sqrt() #RMSE
 ```
 
 
-coefficients in the best lambda model
-```{r}
-coef(lasso.fit$finalModel, lasso.fit$bestTune$lambda) |> as.matrix() |> as.data.frame() |> filter(s1 > 0) |> nrow()
-```
-
-coefficients in 1se model
+How many ccoefficients in 1se model?
 First, find 1se lambda value
 ```{r}
+# fit 1se version
+ctrl2 <- trainControl(method = "cv", number = 10, selectionFunction = "oneSE")
+set.seed(2025)
+lasso.1se <- train(Sale_Price ~ .,
+                   data = training,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1, 
+                                          lambda = exp(seq(10, -5, length = 100))),
+                   trControl = ctrl2)
 
-rmse_1se <- lasso.fit$results |>
-  filter(lambda == best_lambda) |>
-  mutate(RMSE_plus_1se = RMSE + RMSESD) |>
-  pull(RMSE_plus_1se)
+lambda_1se <- lasso.1se$bestTune |> pull(lambda)
 
-lasso.fit$results |>
-  filter(RMSE > 24500,
-         RMSE < 26000)
-# closest RMSE to 1SE is 25147.01, or when lambda = 2640.670
-
-lambda_1se <- lasso.fit$results |>
-  filter(RMSE > 24900,
-         RMSE < 25500) |>
-  pull(lambda)
-
-ggplot(lasso.fit$results,aes(x = lambda, y = RMSE)) +
-  geom_point() + 
-  geom_errorbar(aes(ymin = RMSE - RMSESD, ymax = RMSE + RMSESD)) +
-  scale_x_continuous(trans = "log") +
-  geom_vline(xintercept = best_lambda) +
-  geom_hline(yintercept = rmse_1se, color = "blue") +
-  geom_vline(xintercept = lambda_1se)
 ```
 
 model with 1se lambda value
 ```{r}
+coef(lasso.fit$finalModel, lambda_1se) 
+
+# Number of predictors
 coef(lasso.fit$finalModel, lambda_1se) |> as.matrix() |> as.data.frame() |> filter(s1 > 0) |> nrow()
 ```
 
@@ -152,16 +141,32 @@ plot(enet.fit, par.settings = myPar, xTrans = log)
 
 # coefficients in the final model
 coef(enet.fit$finalModel, s = enet.fit$bestTune$lambda)
-
-enet.fit$results |>
-  filter(RMSE == min(RMSE)) |>
-  mutate(RMSE_plus_1se = RMSE + RMSESD)
-
-
-lasso.fit$results |>
-  filter(RMSE > 25000,
-         RMSE < 27000)
 ```
+
+test error
+```{r}
+enet.pred <- predict(enet.fit, newdata = testing)
+mean((enet.pred - testing[, "Sale_Price"])^2 |> pull()) #MSE
+mean((enet.pred - testing[, "Sale_Price"])^2 |> pull()) |> sqrt() #RMSE
+```
+
+```{r}
+# fit 1se version
+ctrl2 <- trainControl(method = "cv", number = 10, selectionFunction = "oneSE")
+set.seed(2025)
+enet.1se <- train(Sale_Price ~ .,
+                  data = training,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(10, -5, length = 100))),
+                  trControl = ctrl2)
+
+lambda_1se <- enet.1se$bestTune |> pull(lambda)
+enet.1se$results
+
+```
+
+It is very challenging to accurately apply the 1SE rule to the elastic net model, because there are multiple combinations of alpha and lambda that yield similar RMSE values which are close to the 1SE value. You could further refine the grid to create a more precise search for the exact 1SE value, but ultimately multiple combinations of alpha and lambda will remain as potential solutions, meaning it is not possible to select a single 1SE lambda value.
 
 
 ## c. Partial least squares
