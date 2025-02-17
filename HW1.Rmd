@@ -113,7 +113,7 @@ rmse_1se <- lasso.fit$results |>
 
 lasso.fit$results |>
   filter(RMSE > 23500,
-         RMSE < 23600)
+         RMSE < 23600) 
 ```
 
 model with 1se lambda value
@@ -171,8 +171,18 @@ enet.1se <- train(Sale_Price ~ .,
                                          lambda = exp(seq(10, -5, length = 100))),
                   trControl = ctrl2)
 
-lambda_1se <- enet.1se$bestTune |> pull(lambda)
+enet.1se$bestTune 
 
+enet.fit$results |>
+  filter(lambda == enet.fit$bestTune |> pull(lambda),
+         alpha == enet.fit$bestTune |> pull(alpha)) |>
+  mutate(RMSESE = RMSESD / sqrt(12), # why sqrt(12)? in MSE formula is 1/sqrt(fold size)*SD. for RMSE do sqrt of that which is 12 for 1440/10
+         RMSE_1SE = RMSE + RMSESE) |>
+  pull(RMSE_1SE)
+
+enet.fit$results |>
+  filter(RMSE > 23000,
+         RMSE < 24600) 
 ```
 
 It is very challenging to accurately apply the 1SE rule to the elastic net model, because there are multiple combinations of alpha and lambda that yield similar RMSE values which are close to the 1SE value. You could further refine the grid to create a more precise search for the exact 1SE value, but ultimately multiple combinations of alpha and lambda will remain as potential solutions, meaning it is not possible to select a single 1SE lambda value.
@@ -182,11 +192,56 @@ It is very challenging to accurately apply the 1SE rule to the elastic net model
 (c) Fit a partial least squares model on the training data and report the test error. How
 many components are included in your model?
 
+```{r}
+set.seed(2025)
+
+pls.fit <- train(Sale_Price ~ .,
+                 data = training,
+                 method = "pls",
+                 tuneGrid = data.frame(ncomp = 1:(ncol(training)-1)),
+                 trControl = ctrl1,
+                 preProcess = c("center","scale"))
+
+pred_pls <- predict(pls.fit, newdata = testing)
+mean((testing$Sale_Price - pred_pls)^2) |> sqrt()
+
+pls.fit$bestTune
+
+plot(pls.fit)
+```
+
+
 ## d. Model comparison
 (d) Choose the best model for predicting the response and explain your choice.
+```{r}
+resamp <- resamples(list(lasso = lasso.fit, 
+                         lasso_1se = lasso.1se, 
+                         enet = enet.fit,
+                         pls = pls.fit))
+summary(resamp)
+
+bwplot(resamp, metric = "RMSE")
+```
+
 
 ## e. Lasso using glmnet
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
 “glmnet”, and vice versa. Compare the selected tuning parameters between the two
 software approaches. Should there be discrepancies in the chosen parameters, discuss
 potential reasons for these differences.
+```{r}
+x <- model.matrix(Sale_Price ~ ., training)[,-1]
+y <- training$Sale_Price
+
+set.seed(2025)
+
+lasso.glmnet <- cv.glmnet(x, y, 
+                          alpha = 1, 
+                          lambda = exp(seq(10, -5, length = 100)))
+
+lasso.glmnet$lambda.min
+lasso.glmnet$lambda.1se
+
+plot(lasso.glmnet)
+```
+
