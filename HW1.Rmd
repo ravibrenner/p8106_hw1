@@ -2,10 +2,6 @@
 title: "P8106 - HW1"
 author: "Ravi Brenner"
 output: 
-  html_document:
-    df_print: paged
-    toc: yes
-    toc_depth: '2'
   pdf_document:
     toc: yes
     toc_depth: 2
@@ -33,10 +29,6 @@ library(pls)
 library(readr)
 ```
 
-In this exercise, we predict the sale price of a house based on various characteristics. The
-training data are in “housing train.csv”, and the test data are in “housing test.csv”. The
-response is in the column “Sale price”, and other variables can be used as predictors. The
-variable definitions can be found in “dictionary.txt”.
 
 ## Data and problem
 
@@ -89,7 +81,8 @@ mean((lasso.pred - testing[, "Sale_Price"])^2 |> pull()) |> sqrt() #RMSE
 ```
 
 
-How many ccoefficients in 1se model?
+How many coefficients in 1se model?
+
 First, find 1se lambda value
 ```{r}
 # fit 1se version
@@ -103,11 +96,15 @@ lasso.1se <- train(Sale_Price ~ .,
                    trControl = ctrl2)
 
 lambda_1se <- lasso.1se$bestTune |> pull(lambda)
+```
 
+We can also calculate this value manually. The model output `results` gives the RMSE and RMSESD. To convert the SD to SE, we have to divide by the square root (because it is *root* mean square error) of the square root of the fold size (the standard way to calculate SE from SD). In this case the fold size is `r nrow(training)/10`, so we divide by the square root of 12.
+```{r}
 
 rmse_1se <- lasso.fit$results |>
   filter(lambda == best_lambda) |>
-  mutate(RMSESE = RMSESD / sqrt(12), # why sqrt(12)? in MSE formula is 1/sqrt(fold size)*SD. for RMSE do sqrt of that which is 12 for 1440/10
+  mutate(RMSESE = RMSESD / sqrt(12), 
+# why sqrt(12)? in MSE formula is 1/sqrt(fold size)*SD. for RMSE do sqrt of that which is 12 for 1440/10
          RMSE_1SE = RMSE + RMSESE) |>
   pull(RMSE_1SE)
 
@@ -123,6 +120,8 @@ coef(lasso.fit$finalModel, lambda_1se)
 # Number of predictors
 coef(lasso.fit$finalModel, lambda_1se) |> as.matrix() |> as.data.frame() |> filter(s1 > 0) |> nrow()
 ```
+
+So there are 18 predictors in the 1SE lasso model, compared to 25 predictors in the whole data set.
 
 
 ## b. Elastic net
@@ -141,7 +140,6 @@ enet.fit <- train(Sale_Price ~ .,
                                          lambda = exp(seq(10, -5, length = 100))),
                   trControl = ctrl1)
 
-enet.fit$bestTune
 
 myCol <- rainbow(25)
 myPar <- list(superpose.symbol = list(col = myCol),
@@ -151,6 +149,12 @@ plot(enet.fit, par.settings = myPar, xTrans = log)
 
 # coefficients in the final model
 coef(enet.fit$finalModel, s = enet.fit$bestTune$lambda)
+
+```
+
+Best tuning parameters alpha and lambda
+```{r}
+enet.fit$bestTune
 ```
 
 test error
@@ -160,6 +164,7 @@ mean((enet.pred - testing[, "Sale_Price"])^2 |> pull()) #MSE
 mean((enet.pred - testing[, "Sale_Price"])^2 |> pull()) |> sqrt() #RMSE
 ```
 
+Mechanically speaking, it is possible to apply the 1SE rule to elastic net:
 ```{r}
 # fit 1se version
 ctrl2 <- trainControl(method = "cv", number = 10, selectionFunction = "oneSE")
@@ -176,17 +181,16 @@ enet.1se$bestTune
 enet.fit$results |>
   filter(lambda == enet.fit$bestTune |> pull(lambda),
          alpha == enet.fit$bestTune |> pull(alpha)) |>
-  mutate(RMSESE = RMSESD / sqrt(12), # why sqrt(12)? in MSE formula is 1/sqrt(fold size)*SD. for RMSE do sqrt of that which is 12 for 1440/10
+  mutate(RMSESE = RMSESD / sqrt(12), 
          RMSE_1SE = RMSE + RMSESE) |>
   pull(RMSE_1SE)
 
 enet.fit$results |>
-  filter(RMSE > 23000,
-         RMSE < 24600) 
+  filter(RMSE > 23500,
+         RMSE < 23600) 
 ```
 
-It is very challenging to accurately apply the 1SE rule to the elastic net model, because there are multiple combinations of alpha and lambda that yield similar RMSE values which are close to the 1SE value. You could further refine the grid to create a more precise search for the exact 1SE value, but ultimately multiple combinations of alpha and lambda will remain as potential solutions, meaning it is not possible to select a single 1SE lambda value.
-
+Although it is possible to select a 1SE lambda value using the available caret functions, I do not think this is the best idea for elastic net. It is very challenging to accurately apply the 1SE rule to the elastic net model, because there are multiple combinations of alpha and lambda that yield similar RMSE values which are close to the 1SE value. You could further refine the grid to create a more precise search for the exact 1SE value, but ultimately multiple combinations of alpha and lambda will remain as potential solutions. The new value of lambda that corresponds to the "1SE solution" also comes with a different alpha value, meaning you are then jumping onto a different curve to compare RMSE values, and thereby changing the meaning of the lambda value too. It is therefore hard to interpret which combination of values is best with this added flexibility. Thus I would not use the 1SE method with elastic net.
 
 ## c. Partial least squares
 (c) Fit a partial least squares model on the training data and report the test error. How
@@ -203,13 +207,14 @@ pls.fit <- train(Sale_Price ~ .,
                  preProcess = c("center","scale"))
 
 pred_pls <- predict(pls.fit, newdata = testing)
-mean((testing$Sale_Price - pred_pls)^2) |> sqrt()
-
-pls.fit$bestTune
+mean((testing$Sale_Price - pred_pls)^2) |> sqrt() #RMSE
 
 plot(pls.fit)
+
+pls.fit$bestTune
 ```
 
+There are 11 components in the optimal PLS model.
 
 ## d. Model comparison
 (d) Choose the best model for predicting the response and explain your choice.
@@ -223,12 +228,17 @@ summary(resamp)
 bwplot(resamp, metric = "RMSE")
 ```
 
+The models are fairly close, but I would opt to use the elastic net to predict the Sale Price. It is a fairly flexible model and here yields the lowest average RMSE. The lasso and PLS models are both quite close in performance as well. The lasso 1SE model has worse prediction performance, but has fewer predictors and so could be preferred on that basis. However in this case, when I am just trying to optimize predictive power, I would choose the elastic net model.
+
+
 
 ## e. Lasso using glmnet
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
 “glmnet”, and vice versa. Compare the selected tuning parameters between the two
 software approaches. Should there be discrepancies in the chosen parameters, discuss
 potential reasons for these differences.
+
+Fitting lasso using glmnet
 ```{r}
 x <- model.matrix(Sale_Price ~ ., training)[,-1]
 y <- training$Sale_Price
@@ -239,9 +249,14 @@ lasso.glmnet <- cv.glmnet(x, y,
                           alpha = 1, 
                           lambda = exp(seq(10, -5, length = 100)))
 
+plot(lasso.glmnet)
+
 lasso.glmnet$lambda.min
 lasso.glmnet$lambda.1se
 
-plot(lasso.glmnet)
-```
+# compare to the values from caret
+lasso.fit$bestTune
+lasso.1se$bestTune
 
+```
+The minimum lambda value using glmnet and caret was exactly the same. The 1SE lambda value was slightly different (~785 for glmnet and ~675 for caret), but a plausible explanation for this may caret choosing the first value below the 1SE cutoff and glmnet choosing the first value above above the 1SE cutoff, rather than a more substantial estimation difference between methods.
