@@ -104,7 +104,6 @@ We can also calculate this value manually. The model output `results` gives the 
 rmse_1se <- lasso.fit$results |>
   filter(lambda == best_lambda) |>
   mutate(RMSESE = RMSESD / sqrt(12), 
-# why sqrt(12)? in MSE formula is 1/sqrt(fold size)*SD. for RMSE do sqrt of that which is 12 for 1440/10
          RMSE_1SE = RMSE + RMSESE) |>
   pull(RMSE_1SE)
 
@@ -113,7 +112,7 @@ lasso.fit$results |>
          RMSE < 23600) 
 ```
 
-model with 1se lambda value
+Model with 1se lambda value:
 ```{r}
 coef(lasso.fit$finalModel, lambda_1se) 
 
@@ -121,7 +120,7 @@ coef(lasso.fit$finalModel, lambda_1se)
 coef(lasso.fit$finalModel, lambda_1se) |> as.matrix() |> as.data.frame() |> filter(s1 > 0) |> nrow()
 ```
 
-So there are 18 predictors in the 1SE lasso model, compared to 25 predictors in the whole data set.
+There are 18 predictors in the 1SE lasso model, compared to 25 predictors in the whole data set.
 
 
 ## b. Elastic net
@@ -205,10 +204,16 @@ pls.fit <- train(Sale_Price ~ .,
                  tuneGrid = data.frame(ncomp = 1:(ncol(training)-1)),
                  trControl = ctrl1,
                  preProcess = c("center","scale"))
+```
 
+PLS model test error
+```{r}
 pred_pls <- predict(pls.fit, newdata = testing)
 mean((testing$Sale_Price - pred_pls)^2) |> sqrt() #RMSE
+```
 
+PLS number of components
+```{r}
 plot(pls.fit)
 
 pls.fit$bestTune
@@ -228,9 +233,26 @@ summary(resamp)
 bwplot(resamp, metric = "RMSE")
 ```
 
-The models are fairly close, but I would opt to use the elastic net to predict the Sale Price. It is a fairly flexible model and here yields the lowest average RMSE. The lasso and PLS models are both quite close in performance as well. The lasso 1SE model has worse prediction performance, but has fewer predictors and so could be preferred on that basis. However in this case, when I am just trying to optimize predictive power, I would choose the elastic net model.
+The models are fairly close, but I would opt to use the elastic net model to predict the Sale Price. It is a fairly flexible model and here yields the lowest average RMSE. The lasso and PLS models are both quite close in performance as well. The lasso 1SE model has worse prediction performance, but has fewer predictors and so could be preferred on that basis. However in this case, when I am just trying to optimize predictive power, I would choose the elastic net model.
 
+That choice is made solely using training error. At this point we can compare the models based on test error. We can NOT use these results to inform model selection (since we specifically set aside the testing data for this purpose), but it can be interesting to see and understand how our chosen model did on out-of-sample data.
 
+Testing error for each model
+```{r}
+# Lasso
+mean((lasso.pred - testing$Sale_Price)^2) |> sqrt() 
+
+# Lasso 1SE
+mean((predict(lasso.1se,newdata = testing) - testing$Sale_Price)^2) |> sqrt() 
+
+# Elastic Net
+mean((enet.pred - testing$Sale_Price)^2) |> sqrt() 
+
+# PLS
+mean((pred_pls - testing$Sale_Price)^2) |> sqrt() 
+```
+
+It turned out that Elastic Net had the 2nd lowest test error, with the lowest belonging to the Lasso 1SE. Personally this is a good lesson for me for the future when it comes to model selection. The 1SE rule consciously selects a model that has worse training error than other "best fit" models. However by selecting a parsimonious set of predictors it may perform better on out of sample data. In all, I am satisfied with my choice of the elastic net model, since the testing error was fairly close to my expectations based on the training error.
 
 ## e. Lasso using glmnet
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
