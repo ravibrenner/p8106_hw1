@@ -242,7 +242,6 @@ mean((pred_pls - testing$Sale_Price)^2) |> sqrt()
 
 It looks like the Lasso 1SE model has the lowest testing error, so it is the one I would select. This is interesting because, by definition, the 1SE model does not have the lowest possible training error. However because it uses fewer predictors, it is a simpler model, and this simplicity may serve it well when encountering out of sample data. It's possible that our models were somewhat overfit on the training data, and that a simpler model may perform better.
 
-
 ## e. Lasso using glmnet
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
 “glmnet”, and vice versa. Compare the selected tuning parameters between the two
